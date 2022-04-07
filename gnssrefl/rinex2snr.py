@@ -26,6 +26,8 @@ import gnssrefl.gnsssnr as gnsssnr
 
 import gnssrefl.gnsssnrbigger as gnsssnrbigger
 
+import gnssrefl.gpssnrtdb as gpssnrtdb
+
 class constants:
     omegaEarth = 7.2921151467E-5 #      %rad/sec
     mu = 3.986005e14 # Earth GM value
@@ -317,7 +319,11 @@ def conv2snr(year, doy, station, option, orbtype,receiverrate,dec_rate,archive,f
                     log.write('SNR file {0:50s} \n will use hybrid of python and fortran to make \n'.format( snrname))
                     # these are calls to the fortran codes that have been ported to be called from python
                     if (orbtype  == 'gps') or (orbtype == 'nav'):
-                        gpssnr.foo(in1,in2,in3,in4,in5,in6)
+                        #gpssnr.foo(in1,in2,in3,in4,in5,in6)
+                        (iprn, elev, azim, tod, s1, s2, s5) = gpssnrtdb.foo(in1, in2, in3, in4, in5, in6)
+                        snr_array = np.stack((iprn, elev, azim, tod, s1, s2, s5), axis=1)
+                        # np.save('snr_array.npy',snr_array)
+                        tdb_fn = snr2tdb(station, year, doy, snr_array)
                     else:
                         if (orbtype == 'ultra') or (orbtype == 'wum'):
                             print('Using an ultrarapid orbit', orbtype)
@@ -1010,6 +1016,91 @@ def go_from_crxgz_to_rnx(c3gz):
 
     return translated, rnx
 
+def make_schema():
+    filters1 = tiledb.FilterList([tiledb.ZstdFilter(level=7)])
+    filters2 = tiledb.FilterList([tiledb.ByteShuffleFilter(), tiledb.ZstdFilter(level=7)])
+    filters3 = tiledb.FilterList([tiledb.BitWidthReductionFilter(), tiledb.ZstdFilter(level=7)])
 
+    d0 = tiledb.Dim(name="time", domain=(315964800000000, 4102444800000000), tile=21600000000, dtype=np.int64,
+                    filters=filters1)
+    d1 = tiledb.Dim(name="sys", domain=(0, 254), tile=1, dtype=np.uint8, filters=filters1)
+    d2 = tiledb.Dim(name="sat", domain=(0, 254), tile=1, dtype=np.uint8, filters=filters1)
+    d3 = tiledb.Dim(name="obs", dtype="ascii", filters=filters1)
+
+    dom = tiledb.Domain(d0,d1,d2,d3)
+
+    # Create an attribute
+    bit_width_reduction = tiledb.BitWidthReductionFilter()
+    compression_zstd = tiledb.ZstdFilter()
+    Bzip2=tiledb.Bzip2Filter(level=9)
+    a1 = tiledb.Attr(name="cn0", dtype=np.float32, filters=filters2)
+    a2 = tiledb.Attr(name="elevation", dtype=np.float32, filters=filters2)
+    a3 = tiledb.Attr(name="azimuth", dtype=np.float32, filters=filters2)
+    a4 = tiledb.Attr(name="edot", dtype=np.float32, filters=filters2)
+
+    # Create the array schema, setting `sparse=True` to indicate a sparse array
+    offsets_filters = tiledb.FilterList([tiledb.PositiveDeltaFilter(), tiledb.BitWidthReductionFilter(), tiledb.ZstdFilter(level=7)])
+    coords_filters = tiledb.FilterList([tiledb.ZstdFilter(level=7)])
+    schema = tiledb.ArraySchema(
+        domain=dom, sparse=True, attrs=[a0, a1, a2, a3, a4],
+        cell_order='row-major', tile_order='row-major',
+        capacity=100000, offsets_filters=offsets_filters,
+        coords_filters=coords_filters
+    )
+
+    return schema1
+
+def unix_time_second_micro(dt):
+    epoch = datetime.datetime.utcfromtimestamp(0)
+    return (dt - epoch).total_seconds() * 1000000
+
+def snr2tdb(station, year, doy, snr_array):
+    # remove rows having all zeroes
+    snr_array = snr_array[~np.all(snr_array == 0, axis=1)]
+
+    # create sys column
+    sys=np.zeros((len(snr_array[:,0]),1))
+    sys[snr_array[:,0]>100]=1
+    sys[snr_array[:,0]>200]=2
+    snr_array=np.hstack([snr_array,sys])
+
+    #sort array
+    ind = np.lexsort((snr_array[:,0],snr_array[:,7],snr_array[:,3]))
+    snr_array=snr_array[ind]
+
+    # translate time to Time stamp for a given epoch in POSIX Microseconds from 1970-01-01T00:00:00
+    file_date=g.doy2ymd(year,doy)
+    start = np.int64(unix_time_second_micro(file_date))
+    snr_array[:,3]=(snr_array[:,3]*1e6+start).astype(int)
+
+    # set dimensional arrays
+    d_time_data=snr_array[:,3].astype('int64')
+    d_sys_data=snr_array[:,7].astype('uint8')
+    d_sat_data=snr_array[:,0].astype('uint8')
+
+    # make attribute arrays
+    a_el_data=snr_array[:,1].astype('float32')
+    a_az_data=snr_array[:,2].astype('float32')
+    #a_edot_data=snr_array[:,X]  WHERE DOES EDOT GET POPULATED?
+    a_edot_data=np.zeros((len(snr_array[:,0]))).astype('float32')
+
+    tdb_fn="%s.tdb" %station
+
+    obs_list=['s1','s2','s5']
+
+    if not Path(tdb_fn).exists():
+        # if not, make it
+        schema1=make_schema()
+        tiledb.Array.create(tdb_fn, schema1)
+
+    with tiledb.open(tdb_fn, 'w') as A:
+        for i,obs in enumerate(obs_list):
+            d_obs_data=(np.full(d_sys_data.shape,obs))
+            a_cn0_data=snr_array[:,i+4].astype('float32')
+            A[d_time_data, d_sys_data, d_sat_data, d_obs_data] = \
+                {'cn0': a_cn0_data, 'elevation': a_el_data, 'azimuth': a_az_data, 'edot':a_edot_data}
+    tiledb.consolidate(tdb_fn)
+    tiledb.vacuum(tdb_fn)
+    return tdb_fn
 
 
