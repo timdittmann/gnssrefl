@@ -11,6 +11,7 @@ import sys
 import time
 
 from pathlib import Path
+import tiledb
 
 # progress bar for RINEX translation/orbits
 from progress.bar import Bar
