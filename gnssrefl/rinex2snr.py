@@ -10,6 +10,7 @@ import subprocess
 import sys
 import time
 
+from pathlib import Path
 
 # progress bar for RINEX translation/orbits
 from progress.bar import Bar
