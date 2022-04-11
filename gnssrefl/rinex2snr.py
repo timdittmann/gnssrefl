@@ -42,7 +42,7 @@ def quickname(station,year,cyy, cdoy, csnr):
     fname =  xdir + str(year) + '/snr/' + station + '/' + station + cdoy + '0.' + cyy + '.snr' + csnr
     return fname
 
-def run_rinex2snr(station, year_list, doy_list, isnr, orbtype, rate,dec_rate,archive,fortran,nol,overwrite,translator,srate,mk,skipit,stream='R'):
+def run_rinex2snr(station, year_list, doy_list, isnr, orbtype, rate,dec_rate,archive,fortran,nol,overwrite,translator,srate,mk,skipit,stream='R',tdb=False):
     """
     runs the rinex 2 snr conversion
     inputs:
@@ -146,7 +146,7 @@ def run_rinex2snr(station, year_list, doy_list, isnr, orbtype, rate,dec_rate,arc
                     if version == 2:
                         the_makan_option(station,cyyyy,cyy,cdoy) # looks everywhere in your local directories
                         if os.path.exists(r):
-                            conv2snr(year, doy, station, isnr, orbtype,rate,dec_rate,archive,fortran,translator) 
+                            conv2snr(year, doy, station, isnr, orbtype,rate,dec_rate,archive,fortran,translator, tdb)
                         else:
                             print('You Chose the No Look Option, but did not provide the needed RINEX file.')
                     if version == 3:
@@ -165,7 +165,7 @@ def run_rinex2snr(station, year_list, doy_list, isnr, orbtype, rate,dec_rate,arc
                             print('The RINEX 3 file exists locally')
                             fexists = g.new_rinex3_rinex2(r3,r2)
                             if fexists:
-                                conv2snr(year, doy, station, isnr, orbtype,rate,dec_rate,archive,fortran,translator) 
+                                conv2snr(year, doy, station, isnr, orbtype,rate,dec_rate,archive,fortran,translator, tdb)
                             else:
                                 print('Something about the RINEX 3-2 conversion did not work')
                         else:
@@ -207,17 +207,17 @@ def run_rinex2snr(station, year_list, doy_list, isnr, orbtype, rate,dec_rate,arc
                         if fexists:
                              print('RINEX 2 created from v3', year, doy, ' Now remove RINEX 3 files and convert')
                              subprocess.call(['rm', '-f',rnx_filename]) # rnx
-                             conv2snr(year, doy, station, isnr, orbtype,rate,dec_rate,archive,fortran,translator) 
+                             conv2snr(year, doy, station, isnr, orbtype,rate,dec_rate,archive,fortran,translator, tdb)
                         else:
                             print('Unsuccessful RINEX 3 retrieval/translation', year, doy)
                     else:
                         print(station, ' year:', year, ' doy:', doy, 'from: ', archive)
                         # this is rinex version 2 - finds rinex and converts it
-                        conv2snr(year, doy, station, isnr, orbtype,rate,dec_rate,archive,fortran,translator) 
+                        conv2snr(year, doy, station, isnr, orbtype,rate,dec_rate,archive,fortran,translator, tdb)
 
     #print('And I guess my work is done now!')
 
-def conv2snr(year, doy, station, option, orbtype,receiverrate,dec_rate,archive,fortran,translator):
+def conv2snr(year, doy, station, option, orbtype,receiverrate,dec_rate,archive,fortran,translator,tdb):
     """
     inputs: year and day of year (integers) and station name
     option is for the snr creation ??? integer or character?
@@ -321,11 +321,17 @@ def conv2snr(year, doy, station, option, orbtype,receiverrate,dec_rate,archive,f
                     log.write('SNR file {0:50s} \n will use hybrid of python and fortran to make \n'.format( snrname))
                     # these are calls to the fortran codes that have been ported to be called from python
                     if (orbtype  == 'gps') or (orbtype == 'nav'):
-                        #gpssnr.foo(in1,in2,in3,in4,in5,in6)
-                        (iprn, elev, azim, tod, s1, s2, s5) = gpssnrtdb.foo(in1, in2, in3, in4, in5, in6)
-                        snr_array = np.stack((iprn, elev, azim, tod, s1, s2, s5), axis=1)
-                        # np.save('snr_array.npy',snr_array)
-                        tdb_fn = snr2tdb(station, year, doy, snr_array)
+                        if not tdb:
+                            gpssnr.foo(in1,in2,in3,in4,in5,in6)
+                            print('traditional way')
+                        if tdb:
+                            print('using tiledb')
+                            (iprn, elev, azim, tod, s1, s2, s5) = gpssnrtdb.foo(in1, in2, in3, in4, in5, in6)
+                            edot=s6=s7=s8=np.full(len(iprn), np.nan)
+
+                            snr_array = np.stack((iprn, elev, azim, tod, edot, s1, s2, s5, s6,s7,s8), axis=1)
+                            #np.save('snr_array.npy',snr_array)
+                            tdb_fn = snr2tdb(station, year, doy, snr_array)
                     else:
                         if (orbtype == 'ultra') or (orbtype == 'wum'):
                             print('Using an ultrarapid orbit', orbtype)
@@ -1018,6 +1024,99 @@ def go_from_crxgz_to_rnx(c3gz):
 
     return translated, rnx
 
+
+def make_schema():
+    filters1 = tiledb.FilterList([tiledb.ZstdFilter(level=7)])
+    filters2 = tiledb.FilterList([tiledb.ByteShuffleFilter(), tiledb.ZstdFilter(level=7)])
+    filters3 = tiledb.FilterList([tiledb.BitWidthReductionFilter(), tiledb.ZstdFilter(level=7)])
+
+    d0 = tiledb.Dim(name="time", domain=(315964800000000, 4102444800000000), tile=21600000000, dtype=np.int64,
+                    filters=filters1)
+    d1 = tiledb.Dim(name="sys", domain=(0, 254), tile=1, dtype=np.uint8, filters=filters1)
+    d2 = tiledb.Dim(name="sat", domain=(0, 254), tile=1, dtype=np.uint8, filters=filters1)
+    d3 = tiledb.Dim(name="obs", dtype="ascii", filters=filters1)
+
+    dom = tiledb.Domain(d0, d1, d2, d3)
+
+    # Create an attribute
+    bit_width_reduction = tiledb.BitWidthReductionFilter()
+    compression_zstd = tiledb.ZstdFilter()
+    Bzip2 = tiledb.Bzip2Filter(level=9)
+    a0 = tiledb.Attr(name="val", dtype=np.float32, filters=filters2)
+
+    # Create the array schema, setting `sparse=True` to indicate a sparse array
+    offsets_filters = tiledb.FilterList(
+        [tiledb.PositiveDeltaFilter(), tiledb.BitWidthReductionFilter(), tiledb.ZstdFilter(level=7)])
+    coords_filters = tiledb.FilterList([tiledb.ZstdFilter(level=7)])
+    schema = tiledb.ArraySchema(
+        domain=dom, sparse=True, attrs=[a0],
+        cell_order='row-major', tile_order='row-major',
+        capacity=100000, offsets_filters=offsets_filters,
+        coords_filters=coords_filters
+    )
+
+    return schema
+
+
+def unix_time_second_micro(dt):
+    epoch = datetime.datetime.utcfromtimestamp(0)
+    return (dt - epoch).total_seconds() * 1000000
+
+
+def snr2tdb(station, year, doy, snr_array):
+    # remove rows having all zeroes
+
+    iprn_col, elev_col, azim_col, tod_col, edot_col, \
+        s1_col, s2_col, s5_col, s6_col, s7_col, s8_col, sys_col= np.arange(12)
+
+    #snr_array = snr_array[~np.all(snr_array == 0, axis=1)]
+    snr_array = snr_array[~np.all(((snr_array == 0) | np.isnan(snr_array)), axis=1)]
+
+    # create sys column
+    sys = np.zeros((len(snr_array[:, iprn_col]), 1))
+    sys[snr_array[:, iprn_col] > 100] = 1
+    sys[snr_array[:, iprn_col] > 200] = 2
+    snr_array = np.hstack([snr_array, sys])
+
+    #np.save('snr_array.npy', snr_array)
+    # sort array
+    ind = np.lexsort((snr_array[:, iprn_col], snr_array[:, sys_col], snr_array[:, tod_col]))
+    snr_array = snr_array[ind]
+
+    #np.save('snr_array2.npy', snr_array)
+
+    # translate time to Time stamp for a given epoch in POSIX Microseconds from 1970-01-01T00:00:00
+    file_date = g.doy2ymd(year, doy)
+    start = np.int64(unix_time_second_micro(file_date))
+    snr_array[:, tod_col] = (snr_array[:, tod_col] * 1e6 + start).astype(int)
+
+    # set dimensional arrays
+    d_time_data = snr_array[:, tod_col].astype('int64')
+    d_sys_data = snr_array[:, sys_col].astype('uint8')
+    d_sat_data = snr_array[:, iprn_col].astype('uint8')
+
+    tdb_fn = "%s.tdb" % station
+
+    obs_list = ['az', 'el', 'edot','s1', 's2', 's5', 's6', 's7', 's8']
+    obs_col = [azim_col,elev_col, edot_col, s1_col, s2_col, s5_col, s6_col, s7_col, s8_col]
+
+    if not Path(tdb_fn).exists():
+        # if not, make it
+        schema1 = make_schema()
+        tiledb.Array.create(tdb_fn, schema1)
+
+    with tiledb.open(tdb_fn, 'w') as A:
+        for obs, col in zip(obs_list, obs_col):
+            d_obs_data = (np.full(d_sys_data.shape, obs))
+            a_val_data = snr_array[:, col].astype('float32')
+            A[d_time_data, d_sys_data, d_sat_data, d_obs_data] = \
+                {'val': a_val_data}
+    tiledb.consolidate(tdb_fn)
+    tiledb.vacuum(tdb_fn)
+    return tdb_fn
+'''
+OLD VERSION< KEEP FOR NOW
+
 def make_schema():
     filters1 = tiledb.FilterList([tiledb.ZstdFilter(level=7)])
     filters2 = tiledb.FilterList([tiledb.ByteShuffleFilter(), tiledb.ZstdFilter(level=7)])
@@ -1035,26 +1134,22 @@ def make_schema():
     bit_width_reduction = tiledb.BitWidthReductionFilter()
     compression_zstd = tiledb.ZstdFilter()
     Bzip2=tiledb.Bzip2Filter(level=9)
-    a1 = tiledb.Attr(name="cn0", dtype=np.float32, filters=filters2)
-    a2 = tiledb.Attr(name="elevation", dtype=np.float32, filters=filters2)
-    a3 = tiledb.Attr(name="azimuth", dtype=np.float32, filters=filters2)
-    a4 = tiledb.Attr(name="edot", dtype=np.float32, filters=filters2)
+    a0 = tiledb.Attr(name="cn0", dtype=np.float32, filters=filters2)
+    a1 = tiledb.Attr(name="elevation", dtype=np.float32, filters=filters2)
+    a2 = tiledb.Attr(name="azimuth", dtype=np.float32, filters=filters2)
+    a3 = tiledb.Attr(name="edot", dtype=np.float32, filters=filters2)
 
     # Create the array schema, setting `sparse=True` to indicate a sparse array
     offsets_filters = tiledb.FilterList([tiledb.PositiveDeltaFilter(), tiledb.BitWidthReductionFilter(), tiledb.ZstdFilter(level=7)])
     coords_filters = tiledb.FilterList([tiledb.ZstdFilter(level=7)])
     schema = tiledb.ArraySchema(
-        domain=dom, sparse=True, attrs=[a0, a1, a2, a3, a4],
+        domain=dom, sparse=True, attrs=[a0, a1, a2, a3],
         cell_order='row-major', tile_order='row-major',
         capacity=100000, offsets_filters=offsets_filters,
         coords_filters=coords_filters
     )
 
-    return schema1
-
-def unix_time_second_micro(dt):
-    epoch = datetime.datetime.utcfromtimestamp(0)
-    return (dt - epoch).total_seconds() * 1000000
+    return schema
 
 def snr2tdb(station, year, doy, snr_array):
     # remove rows having all zeroes
@@ -1105,4 +1200,4 @@ def snr2tdb(station, year, doy, snr_array):
     tiledb.vacuum(tdb_fn)
     return tdb_fn
 
-
+'''

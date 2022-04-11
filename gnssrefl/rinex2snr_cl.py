@@ -46,11 +46,12 @@ def parse_arguments():
     parser.add_argument("-stream", default=None, help="Set to R or S (RINEX 3 only)", type=str)
     parser.add_argument("-mk", default=None, help="use True for uppercase station names ", type=str)
     parser.add_argument("-weekly", default=None, help="use True for weekly data translation", type=str)
+    parser.add_argument("-tdb", default=None, metavar='False', help="boolean", type=str)
 
     args = parser.parse_args().__dict__
 
     # convert all expected boolean inputs from strings to booleans
-    boolean_args = ['nolook', 'fortran', 'overwrite', 'mk', 'weekly']
+    boolean_args = ['nolook', 'fortran', 'overwrite', 'mk', 'weekly','tdb']
     args = str2bool(args, boolean_args)
 
     # only return a dictionary of arguments that were added from the user - all other defaults will be set in code below
@@ -60,7 +61,7 @@ def parse_arguments():
 def rinex2snr(station: str, year: int, doy: int, snr: int = 66, orb: str = 'nav', rate: str = 'low', dec: int = 0,
               fortran: bool = False, nolook: bool = False, archive: str = 'all', doy_end: int = None,
               year_end: int = None, overwrite: bool = False, translator: str = 'hybrid', samplerate: int = 30,
-              stream: str = 'R', mk: bool = False, weekly: bool = False):
+              stream: str = 'R', mk: bool = False, weekly: bool = False, tdb: bool = False):
     """
         rinex2snr translates RINEX files to an SNR format. This function will fetch orbit files for you.
 
@@ -340,7 +341,7 @@ def rinex2snr(station: str, year: int, doy: int, snr: int = 66, orb: str = 'nav'
     args = {'station': station, 'year_list': year_list, 'doy_list': doy_list, 'isnr': snr, 'orbtype': orb,
             'rate': rate, 'dec_rate': dec, 'archive': archive, 'fortran': fortran, 'nol': nolook,
             'overwrite': overwrite, 'translator': translator, 'srate': samplerate, 'mk': mk,
-            'skipit': skipit, 'stream': stream}
+            'skipit': skipit, 'stream': stream, 'tdb': tdb}
 
     rnx.run_rinex2snr(**args)
     print('Feedback written to subdirectory logs')

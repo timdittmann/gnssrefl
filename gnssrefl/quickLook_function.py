@@ -11,14 +11,20 @@ from matplotlib.figure import Figure
 import subprocess
 import warnings
 
+import tiledb
+import datetime
+
 import scipy.interpolate
 import scipy.signal
 
 import gnssrefl.gps as g
 import gnssrefl.rinex2snr as rinex
 
+def unix_time_second_micro(dt):
+    epoch = datetime.datetime.utcfromtimestamp(0)
+    return (dt - epoch).total_seconds() * 1000000
 
-def read_snr_simple(obsfile):
+def read_snr_simple(obsfile, station, year, doy):
     """
     author: Kristine Larson
     input: SNR observation filenames and a boolean for 
@@ -32,16 +38,44 @@ def read_snr_simple(obsfile):
 #   
     allGood = 1
     try:
-        f = np.genfromtxt(obsfile,comments='%')
-        r,c = f.shape
-        # put in a positive elev mask
-        i= f[:,1] > 0
-        f=f[i,:]
+        if obsfile.endswith('.tdb'):
+            file_date = g.doy2ymd(year, doy)
+            start = np.int64(unix_time_second_micro(file_date))
+            end_date = file_date + datetime.timedelta(days=1)
+            end = np.int64(unix_time_second_micro(end_date))
 
-        #print('read_snr_simple, Number of rows:', r, ' Number of columns:',c)
-        sat = f[:,0]; ele = f[:,1]; azi = f[:,2]; t =  f[:,3]
-        edot =  f[:,4]; s1 = f[:,6]; s2 = f[:,7]; s6 = f[:,5]
-        # 
+            with tiledb.open(obsfile, 'r') as A:
+                t = A[start:end, :, :, 'el']['time']
+                print(t)
+                tinds = t.argsort()
+                t = t[tinds]
+                sat = A[start:end, :, :, 'az']['sat'][tinds]
+                ele = A[start:end, :, :, 'el']['val'][tinds]
+                azi = A[start:end, :, :, 'az']['val'][tinds]
+                edot = A[start:end, :, :, 'edot']['val'][tinds]
+
+                s1 = A[start:end, :, :, 's1']['val'][tinds]
+                s2 = A[start:end, :, :, 's2']['val'][tinds]
+                s5 = A[start:end, :, :, 's5']['val'][tinds]
+                s6 = A[start:end, :, :, 's6']['val'][tinds]
+                s7 = A[start:end, :, :, 's7']['val'][tinds]
+                s8 = A[start:end, :, :, 's8']['val'][tinds]
+            #convert time (ms utc) to tod (in sec)
+            t=(t-start)/(1e6)
+            print(t)
+            c=10
+            # put in elev mask?
+        else:
+            f = np.genfromtxt(obsfile,comments='%')
+            r,c = f.shape
+            # put in a positive elev mask
+            i= f[:,1] > 0
+            f=f[i,:]
+
+            #print('read_snr_simple, Number of rows:', r, ' Number of columns:',c)
+            sat = f[:,0]; ele = f[:,1]; azi = f[:,2]; t =  f[:,3]
+            edot =  f[:,4]; s1 = f[:,6]; s2 = f[:,7]; s6 = f[:,5]
+            #
         s1 = np.power(10,(s1/20))  
         s2 = np.power(10,(s2/20))  
         s6 = s6/20; s6 = np.power(10,s6)  
@@ -74,7 +108,8 @@ def read_snr_simple(obsfile):
             snrE[7] = False
         if (np.sum(s8) == 0):
             snrE[8] = False; # print('no s8 data')
-    except:
+    except Exception as e:
+        print(e)
         print('problem reading the SNR file')
         allGood = 0
     return allGood, sat, ele, azi, t, edot, s1, s2, s5, s6, s7, s8, snrE
@@ -152,8 +187,23 @@ def quickLook_function(station, year, doy, snr_type,f,e1,e2,minH,maxH,reqAmp,pel
 # this allows snr file to live in main directory
 # not sure that that is all that useful as I never let that happen
     obsfile = g.define_quick_filename(station,year,doy,snr_type)
+    print(obsfile)
+    obsfiletdb='%s.tdb' %station
+    print(obsfiletdb)
+    print(os.path.isdir(obsfiletdb))
     if os.path.isfile(obsfile):
         print('>>>> The snr file exists ',obsfile)
+        allGood, sat, ele, azi, t, edot, s1, s2, s5, s6, s7, s8, snrE = read_snr_simple(obsfile, station, year, doy)
+    elif os.path.isdir(obsfiletdb):
+        print('trying tdb',obsfiletdb)
+        #check that data for that day is present in the array
+
+        #then load
+        allGood, sat, ele, azi, t, edot, s1, s2, s5, s6, s7, s8, snrE = read_snr_simple(obsfiletdb, station, year, doy)
+
+        if len(sat)<1:
+            print('Please use rinex2snr to make a SNR file')
+            sys.exit()
     else:
         if True:
             #print('looking for the SNR file on disk')
@@ -166,7 +216,7 @@ def quickLook_function(station, year, doy, snr_type,f,e1,e2,minH,maxH,reqAmp,pel
                 #print('This code used to try and make one for you, but I have removed this option.')
                 print('Please us rinex2snr to make a SNR file')
                 sys.exit()
-    allGood,sat,ele,azi,t,edot,s1,s2,s5,s6,s7,s8,snrE = read_snr_simple(obsfile)
+
     # this just means the file existed ... not that it had the frequency you want to use
     if allGood == 1:
         # make output file for the quickLook RRH values, just so you can give them a quick look see
