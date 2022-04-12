@@ -63,7 +63,6 @@ def read_snr_simple(obsfile, station, year, doy):
             #convert time (ms utc) to tod (in sec)
             t=(t-start)/(1e6)
             print(t)
-            c=10
             # put in positive elev mask? TO DO
         else:
             f = np.genfromtxt(obsfile,comments='%')
@@ -184,23 +183,10 @@ def quickLook_function(station, year, doy, snr_type,f,e1,e2,minH,maxH,reqAmp,pel
 # this allows snr file to live in main directory
 # not sure that that is all that useful as I never let that happen
     obsfile = g.define_quick_filename(station,year,doy,snr_type)
-    print(obsfile)
-    obsfiletdb='%s.tdb' %station
-    print(obsfiletdb)
-    print(os.path.isdir(obsfiletdb))
-    if os.path.isfile(obsfile):
-        print('>>>> The snr file exists ',obsfile)
-        allGood, sat, ele, azi, t, edot, s1, s2, s5, s6, s7, s8, snrE = read_snr_simple(obsfile, station, year, doy)
-    elif os.path.isdir(obsfiletdb):
-        print('trying tdb',obsfiletdb)
-        #check that data for that day is present in the array
+    obsfiletdb = '%s.tdb' % station
 
-        #then load
-        allGood, sat, ele, azi, t, edot, s1, s2, s5, s6, s7, s8, snrE = read_snr_simple(obsfiletdb, station, year, doy)
-
-        if len(sat)<1:
-            print('Please use rinex2snr to make a SNR file')
-            sys.exit()
+    if os.path.isfile(obsfile) is True:
+        print('>>>> The snr file exists ', obsfile)
     else:
         if True:
             #print('looking for the SNR file on disk')
@@ -209,11 +195,22 @@ def quickLook_function(station, year, doy, snr_type,f,e1,e2,minH,maxH,reqAmp,pel
                 dkfjaklj = True
                 #print('file exists on disk')
             else:
-                print('>>>> The SNR the file does not exist ',obsfile)
-                #print('This code used to try and make one for you, but I have removed this option.')
-                print('Please us rinex2snr to make a SNR file')
-                sys.exit()
+                #check tiledb (currently in "local")
+                if os.path.isdir(obsfiletdb):
+                    obsfile=obsfiletdb
+                    pass
+                else:
+                    print('>>>> The SNR the file does not exist ',obsfile)
+                    #print('This code used to try and make one for you, but I have removed this option.')
+                    print('Please us rinex2snr to make a SNR file')
+                    sys.exit()
 
+    allGood, sat, ele, azi, t, edot, s1, s2, s5, s6, s7, \
+    s8, snrE = read_snr_simple(obsfile, station, year, doy)
+    #double check tiledb had data
+    if len(sat) < 1:
+        print('Please use rinex2snr to make a SNR file')
+        sys.exit()
     # this just means the file existed ... not that it had the frequency you want to use
     if allGood == 1:
         # make output file for the quickLook RRH values, just so you can give them a quick look see
@@ -221,24 +218,24 @@ def quickLook_function(station, year, doy, snr_type,f,e1,e2,minH,maxH,reqAmp,pel
         rhout = open(quicklog,'w+')
         amax = 0
         minEdataset = np.min(ele)
-        sats = sat 
+        sats = sat
         # very rare that no GPS data exist, so will not check it.  I will probably regret this
         #if (f < 6):
         #    b = sats[(sats<100)]; print('gps',len(b))
         if (f > 100) and (f < 200): # glonass
             b = sats[(sats>100) & (sats<200)]; # print('glonass',len(b))
             if len(b) == 0:
-                print('NO Glonass DATA in the file') ; 
+                print('NO Glonass DATA in the file') ;
                 return data, datakey
         elif (f > 200) & (f < 300): # galileo
             b = sats[(sats>200) & (sats<300)]; # print('galileo',len(b))
             if len(b) == 0:
-                print('NO Galileo data in the file'); 
+                print('NO Galileo data in the file');
                 return data, datakey
         elif (f > 300): # beidou
             b = sats[(sats>300) & (sats<400)]; # print('beidou',len(b))
             if len(b) == 0:
-                print('NO Beidou data in the file'); 
+                print('NO Beidou data in the file');
                 return data, datakey
 
         print('minimum elevation angle (degrees) for this dataset: ', minEdataset)
@@ -264,10 +261,10 @@ def quickLook_function(station, year, doy, snr_type,f,e1,e2,minH,maxH,reqAmp,pel
                 satlist = [satsel]
 
             for satNu in satlist:
-                x,y,Nv,cf,UTCtime,avgAzim,avgEdot,Edot2,delT= g.window_data(s1,s2,s5,s6,s7,s8,sat,ele,azi,t,edot,f,az1,az2,e1,e2,satNu,polyV,pele,screenstats) 
+                x,y,Nv,cf,UTCtime,avgAzim,avgEdot,Edot2,delT= g.window_data(s1,s2,s5,s6,s7,s8,sat,ele,azi,t,edot,f,az1,az2,e1,e2,satNu,polyV,pele,screenstats)
                 allpoints = allpoints + Nv
                 if Nv > minNumPts:
-                    maxF, maxAmp, eminObs, emaxObs,riseSet,px,pz= g.strip_compute(x,y,cf,maxH,desiredP,polyV,minH) 
+                    maxF, maxAmp, eminObs, emaxObs,riseSet,px,pz= g.strip_compute(x,y,cf,maxH,desiredP,polyV,minH)
                     nij =   pz[(px > NReg[0]) & (px < NReg[1])]
                     Noise = 0
                     iAzim = int(avgAzim)
@@ -277,7 +274,7 @@ def quickLook_function(station, year, doy, snr_type,f,e1,e2,minH,maxH,reqAmp,pel
                     if (abs(maxF - minH) < 0.05):
                         tooclose = True
                     if (abs(maxF - maxH) < 0.05):
-                        tooclose = True 
+                        tooclose = True
                     if (len(nij) > 0):
                         Noise = np.mean(nij)
                     else:
@@ -344,11 +341,11 @@ def quickLook_function(station, year, doy, snr_type,f,e1,e2,minH,maxH,reqAmp,pel
                 plt.show()
             else:
                 print('You made a selection that does not exist (i.e. frequency or satellite or constellation)')
-    else: 
+    else:
         print('some kind of problem with SNR file, so I am exiting the code politely.')
 
 
-    # returns multidimensional dictionary of lomb scargle results so 
+    # returns multidimensional dictionary of lomb scargle results so
     # that the jupyter notebook people can replot them
     # 21mar26 added a key
 
@@ -413,7 +410,7 @@ def goodbad(fname,station,year,doy,h1,h2,PkNoise,reqAmp,freq,e1,e2):
     plt.subplot(3,1,3)
     plt.plot([0, 360], [reqAmp, reqAmp], 'k--',label='QC value used')
     plt.plot(a[ij,0], a[ij,3], 'o',color='blue')
-    plt.plot(a[ik,0], a[ik,3], 'o',color='gray') 
+    plt.plot(a[ik,0], a[ik,3], 'o',color='gray')
     plt.legend(loc="upper right")
     plt.ylabel('Spectral Peak Ampl.',fontsize=fs)
     plt.xlabel('Azimuth (degrees)',fontsize=fs)
@@ -433,9 +430,9 @@ def goodbad(fname,station,year,doy,h1,h2,PkNoise,reqAmp,freq,e1,e2):
 #print('I will try to pick up a RINEX file ')
 #print('and translate it for you. This will be GPS only.')
 #print('For now I will check all the official archives for you.')
-#rate = 'low'; dec_rate = 0; archive = 'all'; 
+#rate = 'low'; dec_rate = 0; archive = 'all';
 #rinex.conv2snr(year, doy, station, int(snr_type), 'nav',rate,dec_rate,archive,fortran)
 #if os.path.isfile(obsfile):
-#    print('the SNR file now exists')  
+#    print('the SNR file now exists')
 #else:
 #    print('the RINEX file did not exist, had no SNR data, or failed to convert, so exiting.')
