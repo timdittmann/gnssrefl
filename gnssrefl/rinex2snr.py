@@ -1079,9 +1079,9 @@ def snr2tdb(station, year, doy, snr_array):
     snr_array = np.hstack([snr_array, sys])
 
     #np.save('snr_array.npy', snr_array)
-    # sort array
-    ind = np.lexsort((snr_array[:, iprn_col], snr_array[:, sys_col], snr_array[:, tod_col]))
-    snr_array = snr_array[ind]
+    # sort array (do this in the read instead)
+    #ind = np.lexsort((snr_array[:, iprn_col], snr_array[:, sys_col], snr_array[:, tod_col]))
+    #snr_array = snr_array[ind]
 
     #np.save('snr_array2.npy', snr_array)
 
