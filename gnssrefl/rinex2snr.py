@@ -29,6 +29,7 @@ import gnssrefl.gnsssnr as gnsssnr
 import gnssrefl.gnsssnrbigger as gnsssnrbigger
 
 import gnssrefl.gpssnrtdb as gpssnrtdb
+import gnssrefl.gnsssnrtdb as gnsssnrtdb
 
 class constants:
     omegaEarth = 7.2921151467E-5 #      %rad/sec
@@ -323,7 +324,7 @@ def conv2snr(year, doy, station, option, orbtype,receiverrate,dec_rate,archive,f
                     if (orbtype  == 'gps') or (orbtype == 'nav'):
                         if not tdb:
                             gpssnr.foo(in1,in2,in3,in4,in5,in6)
-                            print('traditional way')
+                            print('gps traditional way')
                         if tdb:
                             print('using tiledb')
                             (iprn, elev, azim, tod, s1, s2, s5) = gpssnrtdb.foo(in1, in2, in3, in4, in5, in6)
@@ -337,7 +338,16 @@ def conv2snr(year, doy, station, option, orbtype,receiverrate,dec_rate,archive,f
                             print('Using an ultrarapid orbit', orbtype)
                             gnsssnrbigger.foo(in1,in2,in3,in4,in5,in6)
                         else:
-                            gnsssnr.foo(in1,in2,in3,in4,in5,in6)
+                            if not tdb:
+                                gnsssnr.foo(in1,in2,in3,in4,in5,in6)
+                                print('gnss traditional way')
+                            if tdb:
+                                print('using tiledb')
+                                (iprn, elev, azim, tod, s1, s2, s5, s6, s7, s8) = gnsssnrtdb.foo(in1, in2, in3, in4, in5, in6)
+                                edot=np.full(len(iprn), np.nan)
+                                snr_array = np.stack((iprn, elev, azim, tod, edot, s1, s2, s5, s6, s7, s8), axis=1)
+                                # np.save('snr_array.npy',snr_array)
+                                tdb_fn = snr2tdb(station, year, doy, snr_array)
                 else:
                     if (translator == 'fortran'):
                         t1=time.time()

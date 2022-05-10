@@ -20,6 +20,11 @@ ext4 = Extension(name='gnssrefl.gpssnrtdb',
         f2py_options=['--verbose'],
         )
 
+ext5 = Extension(name='gnssrefl.gnsssnrtdb',
+        sources=['gnssrefl/gnsssnrtdb.f'],
+        f2py_options=['--verbose'],
+        )
+
 with open("README.md", "r") as readme_file:
     readme = readme_file.read()
 
@@ -70,7 +75,7 @@ setup(
             ], 
         },
     install_requires=requirements,
-    ext_modules = [ext1,ext2,ext3,ext4],
+    ext_modules = [ext1,ext2,ext3,ext4,ext5],
     classifiers=[
         "Programming Language :: Python :: 3.7",
         "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
