@@ -16,7 +16,7 @@ am not willing to write such code myself.**
 
 ## Table of Contents
 
-We are [developing readthedocs documenation](https://gnssrefl.readthedocs.io/en/latest/): please check it out, we'd love feedback.
+We are [developing readthedocs documentation](https://gnssrefl.readthedocs.io/en/latest/): please check it out, we'd love feedback.
 
 1. [Installation](docs/pages/README_install.md)
 2. Understanding the Code
