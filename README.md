@@ -16,6 +16,8 @@ am not willing to write such code myself.**
 
 ## Table of Contents
 
+We are [developing readthedocs documenation](https://gnssrefl.readthedocs.io/en/latest/): please check it out, we'd love feedback.
+
 1. [Installation](docs/pages/README_install.md)
 2. Understanding the Code
     1. [rinex2snr: translating GNSS Data (RINEX, NMEA)](docs/pages/rinex2snr.md)
@@ -34,18 +36,6 @@ am not willing to write such code myself.**
 9. [How can you help this project? How can you ask for help?](docs/pages/contributions_questions.md)
 
 <HR> 
-
-## [gnssrefl Documentation]()
-
-### [gnssrefl Understanding <a name="understanding"></a>](docs/pages/understand.md): project goals, philosophy and methods.
-
-<HR>
-
-### [gnssrefl Utilities <a name="helper"></a>](docs/pages/utilities.md): data retrieval and useful geodetic functions.
-
-<HR>
-
-### [GNSS-IR Community <a name="weneedhelp"></a>](docs/pages/contributions_questions.md): questions,  contributing and acknowledgements.
 
 
 GNSS-IR was developed with funding from NSF (ATM 0740515, EAR 0948957, AGS 0935725, EAR 1144221, AGS 1449554) and 

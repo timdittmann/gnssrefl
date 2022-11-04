@@ -17,7 +17,7 @@ GNSS-IR was developed with funding from NSF (ATM 0740515, EAR 0948957, AGS 09357
 The python package development, docker distributions and jupyter notebooks are supported under NASA 80NSSC20K1731.
 For relevant citations, the code is citable via `doi <https://doi.org/10.5281/zenodo.5601495>`__, and the methods are covered in gnssrefl `publications <https://www.kristinelarson.net/publications>`__.
 
-Kristine M. Larson
+Authors and maintainers: Dr. Kristine M. Larson, Kelly Enloe and Tim Dittmann
 
 [https://kristinelarson.net](https://kristinelarson.net)
 
