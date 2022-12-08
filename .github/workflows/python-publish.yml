@@ -26,7 +26,10 @@ jobs:
       - uses: actions/setup-python@v2
         with:
           python-version: 3.9 
-
+      #install gfortran for build
+      - name: Install gfortran
+        run: sudo apt-get install gfortran
+        
       # Installs and upgrades pip, installs other dependencies and installs the package from setup.py
       - name: "Installs and upgrades pip, installs other dependencies and installs the package from setup.py"
         run: |
