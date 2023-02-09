@@ -39,23 +39,70 @@ def parse_arguments():
     parser.add_argument("-delTmax", default=None, type=float, help="max arc length (min) default is 75. Shorten for tides.")
     parser.add_argument('-azlist', nargs="*",type=float,  help='User defined azimuth zones, i.e. 0 90 90 180 would mean only the east. Must be an even number of values.')
     parser.add_argument('-frlist', nargs="*",type=int,  help='User defined frequencies using our nomenclature.')
+    parser.add_argument('-offset_meta', default=False, type=bool, help='check gage offset file for antenna offset')
 
 
     args = parser.parse_args().__dict__
 
     # convert all expected boolean inputs from strings to booleans
-    boolean_args = ['allfreq', 'l1', 'l2c', 'xyz', 'refraction']
+    boolean_args = ['allfreq', 'l1', 'l2c', 'xyz', 'refraction','offset_meta']
     args = str2bool(args, boolean_args)
 
     # only return a dictionary of arguments that were added from the user - all other defaults will be set in code below
     return {key: value for key, value in args.items() if value is not None}
 
+import datetime, csv, urllib.request
+
+def check_offsets(station):
+    """
+    check unavco GAGE processing offset file for sources of possible gnssrefl timeseries offsets
+    currently only relevant for ~2.1k stations processed by GAGE
+
+    Parameters
+    ----------
+    station : str
+        4 character station ID.
+
+    Returns
+    ----------
+    offset_meta_dates : list
+        list of offset datetime dates
+
+    offset_meta_vals : list
+        list of offset information (ant or eq) and vertical offset in mm
+
+    """
+    offset_meta_dates = []
+    offset_meta_vals = []
+    url = 'https://data.unavco.org/archive/gnss/products/offset/cwu.kalts_nam14.off'
+    response = urllib.request.urlopen(url)
+    lines = [l.decode('utf-8') for l in response.readlines()]
+    cr = csv.reader(lines)
+    for row in cr:
+        if row[0][1:5] == station.upper():
+            # DATE
+            year = int(row[0].split()[1])
+            month = int(row[0].split()[2])
+            day = int(row[0].split()[3])
+            hour = int(row[0].split()[4])
+            minute = int(row[0].split()[5])
+            offset_meta_dates.append(datetime.datetime(year=year, day=day, month=month, hour=hour, minute=minute).strftime("%m/%d/%Y, %H:%M:%S"))
+            # Description
+            ofs = row[0].split()[11]
+            evt = row[0].split()[14]
+            if evt == 'AN':
+                offset_meta_vals.append('GNSS hardware swap')# %smm' % (ofs))
+            if evt == 'EQ':
+                offset_meta_vals.append('coseismic offset ')# %smm' % (ofs))
+
+    return offset_meta_dates, offset_meta_vals
 
 def make_json(station: str, lat: float, long: float, height: float, e1: int = 5, e2: int = 25,
               h1: float = 0.5, h2: float = 8.0, nr1: float = None, nr2: float = None,
               peak2noise: float = 2.8, ampl: float = 5.0, allfreq: bool = False,
               l1: bool = False, l2c: bool = False, xyz: bool = False, refraction: bool = True,
-              extension: str = None, ediff: float=2.0, delTmax: float=75.0, azlist: float=[], frlist: float=[] ):
+              extension: str = None, ediff: float=2.0, delTmax: float=75.0, azlist: float=[], frlist: float=[],
+              offset_meta: bool = False):
 
     """
     Make a json file that describes the lomb scargle analysis strategy you will use in gnssrefl.
@@ -296,7 +343,10 @@ def make_json(station: str, lat: float, long: float, height: float, e1: int = 5,
     lsp['delTmax'] = delTmax  
  
     # gzip SNR files after running the code
-    lsp['gzip'] = False   
+    lsp['gzip'] = False
+
+    if offset_meta:
+        lsp['offset_meta_dates'], lsp['offset_meta_vals'] = check_offsets(station)
 
     print('writing out to:', outputfile)
     with open(outputfile, 'w+') as outfile:

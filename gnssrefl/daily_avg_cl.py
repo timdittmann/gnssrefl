@@ -27,10 +27,11 @@ def parse_arguments():
     parser.add_argument("-azim2", default=None, type=int, help="maximum azimuth (deg)")
     parser.add_argument("-test", default=None, type=str, help="augmentation to plot")
     parser.add_argument("-subdir", default=None, type=str, help="non-default subdirectory for output ")
+    parser.add_argument("-offset_meta", default=None, type=str, help="True if you want to check earthscope/gage offset meta")
     args = parser.parse_args().__dict__
 
     # convert all expected boolean inputs from strings to booleans
-    boolean_args = ['plt', 'csv','test']
+    boolean_args = ['plt', 'csv','test','offset_meta']
     args = str2bool(args, boolean_args)
 
     # only return a dictionary of arguments that were added from the user - all other defaults will be set in code below
@@ -38,7 +39,8 @@ def parse_arguments():
 
 
 def daily_avg(station: str , medfilter: float, ReqTracks: int, txtfile: str = None, plt: bool = True, 
-        extension: str = '', year1: int = 2005, year2: int = 2030, fr: int = 0, csv: bool = False, azim1: int = 0, azim2: int = 360, test: bool = False, subdir: str=None):
+        extension: str = '', year1: int = 2005, year2: int = 2030, fr: int = 0, csv: bool = False, azim1: int = 0,
+              azim2: int = 360, test: bool = False, subdir: str=None, offset_meta: bool = False):
     """
         Parameters
         ----------
@@ -143,7 +145,7 @@ def daily_avg(station: str , medfilter: float, ReqTracks: int, txtfile: str = No
     else:
         alldatafile = txtdir + '/' + station + '_allRH.txt' 
 
-    tv, obstimes = da.readin_plot_daily(station, extension, year1, year2, fr, alldatafile, csv, medfilter, ReqTracks,azim1,azim2,test,subdir)
+    tv, obstimes = da.readin_plot_daily(station, extension, year1, year2, fr, alldatafile, csv, medfilter, ReqTracks,azim1,azim2,test,subdir,offset_meta)
 
     # default is to show the plots
     if plt2screen:

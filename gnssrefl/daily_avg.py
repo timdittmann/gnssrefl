@@ -95,7 +95,7 @@ def fbias_daily_avg(station):
 
 
 
-def readin_plot_daily(station,extension,year1,year2,fr,alldatafile,csvformat,howBig,ReqTracks,azim1,azim2,test,subdir):
+def readin_plot_daily(station,extension,year1,year2,fr,alldatafile,csvformat,howBig,ReqTracks,azim1,azim2,test,subdir,offset_meta):
     """
     worker code for daily_avg_cl.py
 
@@ -305,11 +305,11 @@ def readin_plot_daily(station,extension,year1,year2,fr,alldatafile,csvformat,how
     # plot the number of retrievals vs time
     txtdir =  xdir + '/Files/' + subdir 
 
-    daily_avg_stat_plots(obstimes,meanRH,meanAmp, station,txtdir,tv,ngps,nglo,ngal,nbei,test)
+    daily_avg_stat_plots(obstimes,meanRH,meanAmp, station,txtdir,tv,ngps,nglo,ngal,nbei,test, offset_meta)
 
     return tv, obstimes
 
-def daily_avg_stat_plots(obstimes,meanRH,meanAmp, station,txtdir,tv,ngps,nglo,ngal,nbei,test):
+def daily_avg_stat_plots(obstimes,meanRH,meanAmp, station,txtdir,tv,ngps,nglo,ngal,nbei,test,offset_meta):
     """
     plots of results for the daily avg code
       
@@ -350,6 +350,21 @@ def daily_avg_stat_plots(obstimes,meanRH,meanAmp, station,txtdir,tv,ngps,nglo,ng
 #   new plot
     fs = 12 # fontsize
     fig,ax=plt.subplots()
+    if offset_meta:
+        obstimes_sorted=sorted(obstimes)
+        #read in json
+        import gnssrefl.gnssir as guts
+        lsp = guts.read_json_file(station, '')
+        if 'offset_meta_dates' in lsp:
+            for i,offset_d in enumerate(lsp['offset_meta_dates']):
+                offset_d=datetime.datetime.strptime(offset_d, "%m/%d/%Y, %H:%M:%S")
+                if (offset_d > obstimes_sorted[0]) & (offset_d < obstimes_sorted[-1]):
+                    plt.axvline(x=offset_d)
+                    plt.text(x=offset_d, y=np.array(meanRH).mean(), s=lsp['offset_meta_vals'][i])
+        else:
+            print('no offset metatdata in make_json_input() json file')
+
+
     ax.plot(obstimes,meanRH,'b.')
     fig.autofmt_xdate()
     plt.ylabel('Reflector Height (m)',fontsize=fs)
