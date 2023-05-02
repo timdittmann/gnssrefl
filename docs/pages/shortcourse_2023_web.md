@@ -25,8 +25,6 @@
 - How to Run the Code (KL) 
 - Using the API (KL)
 
-- Day 1 [Q&A](https://gnssrefl.readthedocs.io/en/latest/pages/sc_qa.html)
-
 ### May 3: Hydrologic Applications
 - Snow and ice sheets (KL) 
 - Soil Moisture (KL) [Chew video](https://www.youtube.com/watch?v=ntnqD5O8LLo)            

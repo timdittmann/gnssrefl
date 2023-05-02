@@ -12,7 +12,7 @@
 
 Agenda
 ======
-**May 2.** Basic principles of GNSS-IR, How to run the gnssrefl software
+**May 2.** Basic principles of GNSS-IR, How to run the gnssrefl software. [Day 1 Q&A](https://gnssrefl.readthedocs.io/en/latest/pages/sc_qa.html)
 
 **May 3.** Hydrologic Applications: snow accumulation and soil moisture
 
