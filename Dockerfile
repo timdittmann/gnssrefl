@@ -9,8 +9,8 @@ RUN apt-get update && \
 
 ## executables
 RUN mkdir -p /etc/gnssrefl/exe /etc/gnssrefl/orbits /etc/gnssrefl/refl_code/Files
-COPY vendor/gfzrnx_2.0-8219_armlx64 /etc/gnssrefl/exe/
-COPY vendor/gfzrnx_2.0-8219_lx64 /etc/gnssrefl/exe/
+COPY --chown=${NB_UID}:${NB_GID} vendor/gfzrnx_2.0-8219_armlx64 /etc/gnssrefl/exe/
+COPY --chown=${NB_UID}:${NB_GID} vendor/gfzrnx_2.0-8219_lx64 /etc/gnssrefl/exe/
 
 RUN if [ "$TARGETARCH" = "arm64" ] ; then \
   cp /etc/gnssrefl/exe/gfzrnx_2.0-8219_armlx64 /etc/gnssrefl/exe/gfzrnx; else \
@@ -29,10 +29,12 @@ RUN cd /tmp && \
 ENV PATH="/etc/gnssrefl/exe:$PATH" 
 
 RUN pip install numpy --upgrade --ignore-installed
-COPY pyproject.toml README.md setup.py /usr/src/gnssrefl/
-COPY gnssrefl /usr/src/gnssrefl/gnssrefl
-RUN pip3 install --no-cache-dir /usr/src/gnssrefl
+COPY --chown=${NB_UID}:${NB_GID} pyproject.toml README.md setup.py /usr/src/gnssrefl/
+COPY --chown=${NB_UID}:${NB_GID} gnssrefl /usr/src/gnssrefl/gnssrefl
+#RUN pip3 install --no-cache-dir /usr/src/gnssrefl
+RUN pip3 install jupyterlab
 
+ENV PYTHONPATH /usr/src/gnssrefl
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 
 ENV EXE=/etc/gnssrefl/exe
@@ -44,3 +46,7 @@ RUN mv /usr/src/gnssrefl/gnssrefl/gpt_1wA.pickle /etc/gnssrefl/refl_code/input/
 RUN mv /usr/src/gnssrefl/gnssrefl/station_pos.db /etc/gnssrefl/refl_code/Files/
 
 WORKDIR /usr/src/gnssrefl
+
+# Jupyter setup
+COPY --chown=${NB_UID}:${NB_GID} scripts/jupyter_notebook_config.py /usr/src/gnssrefl/.jupyter/
+EXPOSE 8888
